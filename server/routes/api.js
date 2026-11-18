@@ -89,6 +89,15 @@ export function registerApiRoutes(router, deps) {
     if (password.length < 1 || password.length > 200) throw new HttpError(400, 'invalid_input', 'Enter a password.');
     if (store.patientByEmail(email)) throw new HttpError(409, 'email_taken', 'An account with this email already exists.');
     const passwordHash = await hashPassword(password);
+    // ---------------------------------------------------------------------------------------------------------------
+    // PLACEHOLDER: the sample marks every new account as identity verified, so it runs end to end without extra setup.
+    // A real integration must not copy this line as it is. Messaging creates a Spruce contact under the name and email
+    // typed here and gives it a secure conversation in the practice's inbox, so setting identityVerified without
+    // verifying anything lets anyone message the practice as anyone. Set it only once the portal has verified the
+    // patient: at minimum a confirmed email address or phone number, or the identity proofing the portal already does.
+    // The gate that reads it is in mint() in server/app.js. See SECURITY.md, "Verified patient identity".
+    // ---------------------------------------------------------------------------------------------------------------
+    const identityVerified = true;
     // The store checks the email again as it saves, which covers a sign-up that landed during the slow hash.
     const patient = await store
       .createPatient({
@@ -96,6 +105,7 @@ export function registerApiRoutes(router, deps) {
         passwordHash,
         givenName,
         familyName,
+        identityVerified,
         contactId: '',
         patientOrganizationId: '',
         practiceConversationId: '',

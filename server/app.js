@@ -30,6 +30,7 @@ const DEVICE_COOKIE = 'eas_device';
 const DEVICE_ID = /^[A-Za-z0-9_-]{16,64}$/;
 const SAFE_METHODS = new Set(['GET', 'HEAD']);
 const DELETION_PENDING = 'Messaging is closed for this account while a deletion is pending.';
+const IDENTITY_UNVERIFIED = 'Messaging is not available until your identity has been verified.';
 const SWEEP_MS = 60 * 1000;
 const SHUTDOWN_REVOKE_MS = 5000;
 const PASS_THROUGH_STATUSES = new Set([400, 404, 409, 422, 429]);
@@ -75,6 +76,13 @@ export function createApp({ config, store, practice, organization, internalEndpo
   function mint(patientId, deviceId) {
     return withPatientLock(patientId, async () => {
       let patient = store.patientById(patientId);
+      // Spruce shows the practice whatever name and email this call sends, so no contact is created or embedded for a patient
+      // the portal has not verified. Only an explicit true passes: a record without the field is treated as unverified.
+      // See SECURITY.md, "Verified patient identity".
+      if (patient.identityVerified !== true) {
+        log('messaging refused: the patient record is not marked identityVerified (see SECURITY.md)');
+        throw new HttpError(403, 'identity_unverified', IDENTITY_UNVERIFIED);
+      }
       // Spruce refuses to embed a patient whose deletion is pending, so the call is not made.
       if (patient.deletion) throw new HttpError(409, 'deletion_pending', DELETION_PENDING);
       if (!patient.contactId) {
