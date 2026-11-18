@@ -1,5 +1,6 @@
 // Webhook events, pushed over the event stream, are what refresh the Messages page. This fallback poll only
-// covers what an event cannot: an event missed while the stream was down, and any change no event announces.
+// covers what an event cannot: an event missed while the stream was down, and a change no event announces, such as a
+// message the practice posted without notifying the patient.
 export const FALLBACK = {
   // Between polls while the event stream is connected. The poll is kept, slowly, because a connection can stall
   // without the browser noticing, and because the poll is what finds a change no event announces.

@@ -4,7 +4,8 @@ import { conversationAvatar, formatRecent, h, participantNames } from '../ui.js'
 
 const WIDE = window.matchMedia('(min-width: 900px)');
 
-// The number of conversations with unread messages, the same count GET /patient answers, taken from a list already fetched.
+// The number of conversations with unread messages: what GET /patient answers as unreadConversationCount, taken from a list
+// already fetched, since GET /conversations lists every conversation with unread on each.
 export const unreadCount = (conversations) => conversations.filter((conversation) => conversation.unread).length;
 
 // The list of the patient's conversations, shown beside the open thread on wide screens.
@@ -81,7 +82,8 @@ export function conversationList(ctx, selectedId) {
 
   return {
     el,
-    // Webhooks may not announce every change, such as a conversation the practice starts, so the fallback schedule keeps running.
+    // No event announces a message posted without notifying, a conversation the practice starts, or a conversation read on
+    // another device, so the fallback schedule keeps running.
     refresh: () => fallback.now(),
     // A conversation the open thread marked read replaces its copy here, which updates the unread marker with no request.
     update(conversation) {
