@@ -22,8 +22,8 @@ export function homeView(ctx) {
     messagesCard.classList.toggle('attention', count > 0);
     messagesState.textContent = count > 0 ? `You have unread messages from ${practice.name}.` : `Ask ${practice.name} a question, any time.`;
   };
+  // The count is refreshed when the page is routed to, and drawn again through onUnread when it changes.
   showUnread(ctx.state.unread);
-  ctx.refreshUnread();
   if (patient.deletionScheduledFor) messagesState.textContent = 'Messaging is closed while your account is scheduled for deletion.';
 
   const el = h('div', { class: 'page home' }, h('h2', { class: 'greeting' }, `${greeting()}, ${patient.givenName}.`), messagesCard);
