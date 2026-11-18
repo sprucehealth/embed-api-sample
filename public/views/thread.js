@@ -1,15 +1,16 @@
 import { api } from '../api.js';
+import { createFallback } from '../refresh.js';
 import { deliverMessage } from '../send.js';
 import { conversationAvatar, formatDay, formatTime, h, icon, participantNames } from '../ui.js';
 
-const POLL_MS = 5000;
 const PAGE_SIZE = 50;
 const POLL_PAGE_SIZE = 200;
 const NEAR_TOP_PX = 200;
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
-export function threadView(ctx, conversationId) {
+// onRead receives the conversation once it is marked read, and onSent is called after a message is accepted.
+export function threadView(ctx, conversationId, { onRead = () => {}, onSent = () => {} } = {}) {
   const path = `/api/conversations/${encodeURIComponent(conversationId)}`;
   const items = new Map();
   const pending = [];
@@ -17,9 +18,7 @@ export function threadView(ctx, conversationId) {
   let conversation = null;
   let patientAuthorId = '';
   let destroyed = false;
-  let timer = null;
   let loading = null;
-  let polling = false;
   let olderToken = '';
   let loadingOlder = false;
   let composerReadOnly = null;
@@ -41,15 +40,16 @@ export function threadView(ctx, conversationId) {
     el,
     destroy() {
       destroyed = true;
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisible);
+      fallback.stop();
     },
     // A notification for the conversation on screen is shown by fetching the new item, with no toast.
     onNotification(notification) {
       if (notification.conversationId !== conversationId) return false;
-      poll();
+      fallback.now();
       return true;
     },
+    // Events may have been missed while the event stream was down, so the thread asks for anything new.
+    onResync: () => fallback.now(),
     // A deleted or restored item from a webhook replaces the cached copy by id.
     onItem(item) {
       // An item older than the pages held is left out; it arrives in its place when the patient scrolls back to it.
@@ -150,36 +150,33 @@ export function threadView(ctx, conversationId) {
   }
 
   // Asks only for items created at or after the newest one held; the overlap is matched by id.
+  // Runs when an event names this conversation and on the slow fallback schedule; a failure throws so the fallback backs off.
   async function poll() {
-    if (destroyed || loading || polling || document.hidden || !cursor) return;
-    polling = true;
-    try {
-      const query = new URLSearchParams({ pageSize: String(POLL_PAGE_SIZE), startFrom: cursor });
-      const result = await api('GET', `${path}/items?${query}`);
-      if (destroyed) return;
-      advance(result.items);
-      const change = merge(result.items);
-      if (change.stale) return void reload().catch(() => {});
-      if (change.changed) render();
-      if (change.inbound) markRead();
-    } catch {
-      // A failed poll is retried on the next tick.
-    } finally {
-      polling = false;
+    if (destroyed || loading || !cursor) return false;
+    const query = new URLSearchParams({ pageSize: String(POLL_PAGE_SIZE), startFrom: cursor });
+    const result = await api('GET', `${path}/items?${query}`);
+    if (destroyed) return false;
+    advance(result.items);
+    const change = merge(result.items);
+    if (change.stale) {
+      reload().catch(() => {});
+      return true;
     }
+    if (change.changed) render();
+    if (change.inbound) markRead();
+    return change.changed;
   }
 
+  const fallback = createFallback(poll, { streamUp: ctx.streamUp });
+
+  // The read response carries the conversation, unread flag included, so the unread marker needs no request of its own.
   async function markRead() {
     try {
       conversation = await api('POST', `${path}/read`);
-      ctx.refreshUnread();
+      onRead(conversation);
     } catch {
       // The conversation is marked read again the next time it is opened.
     }
-  }
-
-  function onVisible() {
-    if (!document.hidden) poll();
   }
 
   let linksRefreshedAt = 0;
@@ -289,8 +286,8 @@ export function threadView(ctx, conversationId) {
     }
     pending.splice(pending.indexOf(entry), 1);
     render({ toBottom: true });
-    poll();
-    ctx.refreshUnread();
+    fallback.now();
+    onSent();
   }
 
   function renderComposer() {
@@ -383,8 +380,7 @@ export function threadView(ctx, conversationId) {
     .then(() => loadLatest(PAGE_SIZE, { toBottom: true }))
     .then(() => {
       if (destroyed) return;
-      timer = setInterval(poll, POLL_MS);
-      document.addEventListener('visibilitychange', onVisible);
+      fallback.start();
     })
     .catch((err) => {
       if (!destroyed) list.replaceChildren(h('p', { class: 'error center', role: 'alert' }, err.message));
