@@ -7,6 +7,7 @@ import { after, before, describe, test } from 'node:test';
 
 import { ApiError } from '../public/api.js';
 import { deliverMessage } from '../public/send.js';
+import { hashPassword } from '../server/auth.js';
 import { createApp } from '../server/app.js';
 import { createPracticeClient } from '../server/spruce/practice.js';
 import { openStore } from '../server/store.js';
@@ -578,6 +579,69 @@ test('a store that cannot save the contact id does not create a second Spruce co
     assert.equal((await pat('POST', '/api/messaging/connect')).status, 200);
     assert.equal(spruce.state.contacts.length, 1);
     assert.equal(JSON.parse(await readFile(path.join(dataDir, 'store.json'), 'utf8')).patients[0].contactId, 'entity_c1');
+  } finally {
+    await app.close();
+    await spruce.close();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('refuses messaging to a patient whose identity is not verified, and creates or embeds nothing at Spruce', async () => {
+  const spruce = await startFakeSpruce();
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'embed-sample-'));
+  const store = await openStore(dataDir);
+  const practice = createPracticeClient({ baseUrl: spruce.apiUrl, credential: spruce.state.credential });
+  const logs = [];
+  const app = createApp({
+    config: { apiUrl: spruce.apiUrl, embedUrl: spruce.embedUrl, webhookSecret: WEBHOOK_SECRET },
+    store,
+    practice,
+    organization: await practice.organization(),
+    internalEndpointId: 'link_1',
+    log: (line) => logs.push(line),
+  });
+  await app.listen(0);
+  try {
+    const passwordHash = await hashPassword('correct horse');
+    const blank = { passwordHash, contactId: '', patientOrganizationId: '', practiceConversationId: '' };
+    // One record says unverified outright; the others predate the field, one of them already holding a contact from before.
+    await store.createPatient({ ...blank, email: 'unverified@example.com', givenName: 'Una', familyName: 'Verified', identityVerified: false });
+    await store.createPatient({ ...blank, email: 'legacy@example.com', givenName: 'Leg', familyName: 'Acy' });
+    await store.createPatient({ ...blank, email: 'embedded@example.com', givenName: 'Em', familyName: 'Bedded', contactId: 'entity_old' });
+
+    for (const email of ['unverified@example.com', 'legacy@example.com', 'embedded@example.com']) {
+      const client = browser(app.origin());
+      assert.equal((await client('POST', '/api/login', { json: { email, password: 'correct horse' } })).status, 200);
+      for (const [method, pathname] of [
+        ['POST', '/api/messaging/connect'],
+        ['GET', '/api/patient'],
+        ['GET', '/api/conversations'],
+      ]) {
+        const refused = await client(method, pathname);
+        assert.equal(refused.status, 403, `${email} ${pathname}`);
+        assert.deepEqual(refused.body, {
+          statusCode: 403,
+          type: 'identity_unverified',
+          message: 'Messaging is not available until your identity has been verified.',
+        });
+      }
+      assert.equal(store.patientByEmail(email).patientOrganizationId, '');
+    }
+    assert.equal(spruce.state.contacts.length, 0);
+    assert.equal(spruce.state.embedded.size, 0);
+    assert.equal(spruce.state.mints, 0);
+    assert.ok(logs.some((line) => line.includes('not marked identityVerified')));
+
+    // A patient who signs up is marked verified by the sample's placeholder and connects as before.
+    const pat = browser(app.origin());
+    await pat('POST', '/api/signup', { json: { email: 'pat@example.com', password: 'correct horse', givenName: 'Pat', familyName: 'Example' } });
+    assert.equal(store.patientByEmail('pat@example.com').identityVerified, true);
+    const connected = await pat('POST', '/api/messaging/connect');
+    assert.equal(connected.status, 200);
+    assert.equal(connected.body.patient.connected, true);
+    assert.equal(spruce.state.contacts.length, 1);
+    assert.equal(spruce.state.contacts[0].givenName, 'Pat');
+    assert.equal(spruce.state.mints, 1);
   } finally {
     await app.close();
     await spruce.close();

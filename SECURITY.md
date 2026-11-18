@@ -19,6 +19,11 @@ This is sample code, not a supported SDK. It is built to run on a developer's ow
 - The session cookie is `HttpOnly` and `SameSite=Strict`. Sessions live in memory and expire after 12 hours. Signing out, or the end of the session, also ends the event streams that session opened.
 - Account records are stored in `data/store.json`, created readable by the current user only, and excluded from git. A change is written to disk before it takes effect in memory, so a failed write leaves the portal working from what is actually saved.
 
+**Who can message the practice**
+
+- No Spruce contact is created or embedded, and no patient token is minted, unless the patient record has `identityVerified: true`. The check is in `mint()` in `server/app.js` and runs on every mint. A record without the field is refused with `403 identity_unverified`, so accounts saved before the check existed are not let through.
+- The sample's sign-up route sets the field without verifying anything, so the sample runs end to end. That is a placeholder; see "Verified patient identity" below.
+
 **The web surface**
 
 - The server listens on `127.0.0.1` only.
@@ -36,7 +41,7 @@ This is sample code, not a supported SDK. It is built to run on a developer's ow
 ## What a real deployment must add
 
 - **TLS everywhere**, and the `Secure` attribute on cookies. The sample serves plain HTTP because it is bound to loopback.
-- **Verified patient identity.** Embed only patients whose identity you have verified: a confirmed email address or phone number at the least, or the identity proofing your application already does. The sample skips this. Anyone can create a portal account under any name and email, and opening Messages gives that account a secure conversation in the practice's Spruce inbox under that name. The practice will treat the conversation as the real patient and may share protected health information in it, so deciding who is embedded, and as whom, is the most important trust decision an integration makes.
+- **Verified patient identity.** Embed only patients whose identity you have verified: a confirmed email address or phone number at the least, or the identity proofing your application already does. The sample checks for it but does not do it: `mint()` in `server/app.js` refuses any patient whose record lacks `identityVerified: true`, and `POST /api/signup` in `server/routes/api.js` sets that field for every new account without verifying anything. As shipped, anyone can create a portal account under any name and email, and opening Messages gives that account a secure conversation in the practice's Spruce inbox under that name. Replace the placeholder so that the field is set only after verification. The practice will treat the conversation as the real patient and may share protected health information in it, so deciding who is embedded, and as whom, is the most important trust decision an integration makes.
 - **Matching to existing contacts.** Where the practice already has a contact for the patient, embed that contact and do not create a new one. The sample always creates one, which leaves a returning patient with a duplicate and separates the conversation from the record the practice already trusts.
 - **Your real patient identity system** in place of `server/auth.js` and `server/store.js`, including a password policy, account recovery, multi-factor authentication where appropriate, and audit logging. The sample accepts any non-empty password.
 - **A secrets manager** for the organization API token and the webhook endpoint secret.

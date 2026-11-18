@@ -51,7 +51,7 @@ The token is held in the memory of the running process and nowhere else. It is n
 
 ## Walk through it
 
-1. **Create a portal account.** Open the patient portal and choose *Create an account*. This is the sample practice's own account system, standing in for yours. Nothing has been sent to Spruce yet. The sample never verifies the name or email typed here, and step 2 puts whoever signed up in front of the practice under that name, so a real integration must embed only patients whose identity it has verified (see [SECURITY.md](SECURITY.md)).
+1. **Create a portal account.** Open the patient portal and choose *Create an account*. This is the sample practice's own account system, standing in for yours. Nothing has been sent to Spruce yet. The sample never verifies the name or email typed here, and step 2 puts whoever signed up in front of the practice under that name. The backend refuses to create or embed a contact unless the patient record has `identityVerified: true`, and the sign-up route sets that field without verifying anything so that the sample runs end to end. That line, in `POST /api/signup` in `server/routes/api.js`, is a placeholder: a real integration sets the field only once it has verified the patient's identity (see [SECURITY.md](SECURITY.md)).
 2. **Open Messages.** The backend creates a Spruce contact for the patient, embeds it, and mints the patient's first token. The conversation list appears, and the patient now shows up as a contact with a secure conversation in your Spruce inbox.
 3. **Send a message.** Type a message, attach a file with the paperclip button, and send. It arrives in the Spruce inbox.
 4. **Reply from Spruce.** Reply as a teammate in the Spruce app. The open thread shows the reply within a few seconds, and the conversation is marked read.
@@ -77,8 +77,8 @@ webhook simulator (/dev/) ── signed POST ──► └── POST /webhooks/
 |---|---|
 | `server/spruce/practice.js` | The Public API calls: create a contact, embed it, schedule and cancel its deletion, list internal endpoints |
 | `server/spruce/embed.js` | The embed host client and the whole token lifecycle: mint on demand, store a rotated `s-embed-token`, mint again once on `401` |
-| `server/app.js` | `mint()`: create the contact on first use, embed, persist `patientOrganizationId`. `releaseSession()`: revoke the token of a session that expired |
-| `server/routes/api.js` | The portal's own API: conversations, items, posting with `S-Idempotency-Key`, media upload, mark read, attachment download, account details |
+| `server/app.js` | `mint()`: refuse a patient whose identity is not verified, create the contact on first use, embed, persist `patientOrganizationId`. `releaseSession()`: revoke the token of a session that expired |
+| `server/routes/api.js` | The portal's own API: sign-up, where the placeholder marks a new account as identity verified; conversations, items, posting with `S-Idempotency-Key`, media upload, mark read, attachment download, account details |
 | `server/attachments.js` | Keeping signed attachment URLs on the server, and the list of hosts the attachment proxy may fetch from |
 | `server/webhooks.js` | `X-Spruce-Signature` verification and the three embedded event handlers |
 | `server/simulator.js` | How the documented webhook events are built and signed |
@@ -89,6 +89,7 @@ webhook simulator (/dev/) ── signed POST ──► └── POST /webhooks/
 
 Things worth noticing in the code:
 
+- **The identity gate.** `mint()` creates, embeds or mints for a patient only when the record says `identityVerified: true`, and answers anything else with `403` and the type `identity_unverified`, which the portal shows on the Messages page. A record without the field, such as one saved before the field existed, is refused, not treated as verified. The check runs on every mint, so it also stops new tokens for a patient who was embedded before.
 - **Device id.** Each browser gets a long-lived device id cookie. The same id is sent on every mint, so a new token replaces that browser's old one instead of using another of the patient's three device slots.
 - **A conversation is never fetched whole.** Opening it requests the 50 newest items (`order=newest_first&pageSize=50`), scrolling up requests the next older page with the returned `paginationToken`, and polling with `startFrom` asks only for items created since the newest one held.
 - **Opening a conversation fetches its newest page again.** That is what picks up deletions, restorations and renamed teammates. When a poll shows that a message on screen was deleted or restored, or an attachment link has expired, the pages on screen are fetched again, not the conversation.
@@ -145,6 +146,7 @@ The tests run the whole backend against an in-process stand-in for the two Spruc
 | `This organization has no Spruce Link` at start | Create a Spruce Link in Spruce; one must own the patient's conversation. |
 | "Spruce Embedded Secure Messaging is not enabled for this organization" in the portal | The embed call answered `404`. Spruce Embedded Secure Messaging has not been enabled for the organization. |
 | "Messaging is closed while your account is scheduled for deletion" | The patient requested account deletion, and Spruce refuses to embed a patient (`409`) while one is pending. *Keep my account* on the Account page reopens messaging. |
+| "Messaging is not available until your identity has been verified" | The patient record does not say `identityVerified: true`, and the log says `messaging refused`. Accounts created before the gate existed lack the field; create a new account, or use a fresh `DATA_DIR`. |
 | An attachment does not load, and the log says `attachment refused` | The attachment's URL is not on the domain of the configured Spruce hosts. Add its host to `SPRUCE_MEDIA_HOSTS`. |
 | The simulator says to sign in as the patient first | The simulator borrows the patient's current token to read their messages. Sign in as that patient and open Messages. |
 | A patient created against one environment fails against another | `data/store.json` remembers Spruce ids from the first environment. Use a different `DATA_DIR` per environment. |
