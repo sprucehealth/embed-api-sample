@@ -4,7 +4,7 @@
 
 A small patient portal for a fictional practice application. A patient signs in to the portal with the portal's own account and messages the practice through Spruce secure messaging, without a Spruce account or the Spruce app.
 
-It follows the [Spruce Embedded Secure Messaging Overview](https://developer.sprucehealth.com/docs/embed-overview) and the [Spruce Embedded Secure Messaging Integration Guide](https://developer.sprucehealth.com/docs/embed-integration-guide), and shows these flows end to end:
+It follows the [Spruce Embedded Secure Messaging Integration Guide](https://developer.sprucehealth.com/docs/embed-integration-guide) and shows these flows end to end:
 
 - Embed a patient contact and mint a patient token
 - List the patient's conversations and render one
