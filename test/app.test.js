@@ -604,7 +604,7 @@ test('refuses messaging to a patient whose identity is not verified, and creates
   try {
     const passwordHash = await hashPassword('correct horse');
     const blank = { passwordHash, contactId: '', patientOrganizationId: '', practiceConversationId: '' };
-    // One record says unverified outright; the others predate the field, one of them already holding a contact from before.
+    // One record says unverified outright; the others lack the field, and one of them already holds a contact.
     await store.createPatient({ ...blank, email: 'unverified@example.com', givenName: 'Una', familyName: 'Verified', identityVerified: false });
     await store.createPatient({ ...blank, email: 'legacy@example.com', givenName: 'Leg', familyName: 'Acy' });
     await store.createPatient({ ...blank, email: 'embedded@example.com', givenName: 'Em', familyName: 'Bedded', contactId: 'entity_old' });

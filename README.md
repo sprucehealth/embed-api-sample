@@ -89,7 +89,7 @@ webhook simulator (/dev/) ── signed POST ──► └── POST /webhooks/
 
 Things worth noticing in the code:
 
-- **The identity gate.** `mint()` creates, embeds or mints for a patient only when the record says `identityVerified: true`, and answers anything else with `403` and the type `identity_unverified`, which the portal shows on the Messages page. A record without the field, such as one saved before the field existed, is refused, not treated as verified. The check runs on every mint, so it also stops new tokens for a patient who was embedded before.
+- **The identity gate.** `mint()` creates, embeds or mints for a patient only when the record says `identityVerified: true`, and answers anything else with `403` and the type `identity_unverified`, which the portal shows on the Messages page. A record without the field is refused, not treated as verified. The check runs on every mint, not only the first.
 - **Device id.** Each browser gets a long-lived device id cookie. The same id is sent on every mint, so a new token replaces that browser's old one instead of using another of the patient's three device slots.
 - **A conversation is never fetched whole.** Opening it requests the 50 newest items (`order=newest_first&pageSize=50`), scrolling up requests the next older page with the returned `paginationToken`, and polling with `startFrom` asks only for items created since the newest one held.
 - **Opening a conversation fetches its newest page again.** That is what picks up deletions, restorations and renamed teammates. When a poll shows that a message on screen was deleted or restored, or an attachment link has expired, the pages on screen are fetched again, not the conversation.
@@ -146,7 +146,6 @@ The tests run the whole backend against an in-process stand-in for the two Spruc
 | `This organization has no Spruce Link` at start | Create a Spruce Link in Spruce; one must own the patient's conversation. |
 | "Spruce Embedded Secure Messaging is not enabled for this organization" in the portal | The embed call answered `404`. Spruce Embedded Secure Messaging has not been enabled for the organization. |
 | "Messaging is closed while your account is scheduled for deletion" | The patient requested account deletion, and Spruce refuses to embed a patient (`409`) while one is pending. *Keep my account* on the Account page reopens messaging. |
-| "Messaging is not available until your identity has been verified" | The patient record does not say `identityVerified: true`, and the log says `messaging refused`. Accounts created before the gate existed lack the field; create a new account, or use a fresh `DATA_DIR`. |
 | An attachment does not load, and the log says `attachment refused` | The attachment's URL is not on the domain of the configured Spruce hosts. Add its host to `SPRUCE_MEDIA_HOSTS`. |
 | The simulator says to sign in as the patient first | The simulator borrows the patient's current token to read their messages. Sign in as that patient and open Messages. |
 | A patient created against one environment fails against another | `data/store.json` remembers Spruce ids from the first environment. Use a different `DATA_DIR` per environment. |

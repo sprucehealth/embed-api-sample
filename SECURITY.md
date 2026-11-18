@@ -21,7 +21,7 @@ This is sample code, not a supported SDK. It is built to run on a developer's ow
 
 **Who can message the practice**
 
-- No Spruce contact is created or embedded, and no patient token is minted, unless the patient record has `identityVerified: true`. The check is in `mint()` in `server/app.js` and runs on every mint. A record without the field is refused with `403 identity_unverified`, so accounts saved before the check existed are not let through.
+- No Spruce contact is created or embedded, and no patient token is minted, unless the patient record has `identityVerified: true`. The check is in `mint()` in `server/app.js` and runs on every mint. A record without the field is refused with `403 identity_unverified`, not treated as verified.
 - The sample's sign-up route sets the field without verifying anything, so the sample runs end to end. That is a placeholder; see "Verified patient identity" below.
 
 **The web surface**

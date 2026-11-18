@@ -77,8 +77,8 @@ export function createApp({ config, store, practice, organization, internalEndpo
     return withPatientLock(patientId, async () => {
       let patient = store.patientById(patientId);
       // Spruce shows the practice whatever name and email this call sends, so no contact is created or embedded for a patient
-      // the portal has not verified. Only an explicit true passes: a record without the field, such as one saved before the
-      // field existed, is treated as unverified and refused, never grandfathered in. See SECURITY.md, "Verified patient identity".
+      // the portal has not verified. Only an explicit true passes: a record without the field is treated as unverified.
+      // See SECURITY.md, "Verified patient identity".
       if (patient.identityVerified !== true) {
         log('messaging refused: the patient record is not marked identityVerified (see SECURITY.md)');
         throw new HttpError(403, 'identity_unverified', IDENTITY_UNVERIFIED);
