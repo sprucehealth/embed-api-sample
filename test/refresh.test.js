@@ -179,3 +179,21 @@ test('a refresh asked for during a run starts again after it, never alongside it
   assert.equal(t.nextIn(), 30_000);
   fallback.stop();
 });
+
+test('a refresh asked for before start runs once and schedules nothing', async () => {
+  const t = harness();
+  let runs = 0;
+  const fallback = createFallback(
+    async () => {
+      runs += 1;
+      return false;
+    },
+    { doc: t.doc, timers: t.timers, clock: t.clock },
+  );
+  await fallback.now();
+  assert.equal(runs, 1);
+  assert.equal(t.nextIn(), null);
+  fallback.start();
+  assert.equal(t.nextIn(), 30_000);
+  fallback.stop();
+});

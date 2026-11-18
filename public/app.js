@@ -23,6 +23,8 @@ const viewRoot = document.getElementById('view');
 const toasts = document.getElementById('toasts');
 
 const state = { patient: null, practice: { name: 'Patient portal' }, unread: 0 };
+// How long to wait before opening the event stream again after the browser gave up on it.
+const STREAM_RETRY_MS = 60_000;
 // A count fetched this recently is shown as it is on navigation; a webhook event or a reconnect fetches it again at once.
 const UNREAD_FRESH_MS = 60_000;
 
@@ -111,21 +113,25 @@ function signedOut() {
 
 // One server-sent event stream carries what the backend learned from webhooks to this patient's open pages.
 // These events are what refresh the page; the views poll only slowly, as a fallback.
-function openEvents() {
+function openEvents({ dropped = false } = {}) {
   events?.close();
-  events = new EventSource('/api/events');
-  let dropped = false;
+  const source = new EventSource('/api/events');
+  events = source;
   // The browser reconnects by itself after a drop. Events sent meanwhile are lost, so the page refreshes on reconnecting.
-  events.addEventListener('error', () => {
+  source.addEventListener('error', () => {
     dropped = true;
+    // After an error response, such as a 502 from a proxy, the browser gives up for good, so the stream is opened again later.
+    if (source.readyState === EventSource.CLOSED) {
+      setTimeout(() => events === source && openEvents({ dropped: true }), STREAM_RETRY_MS);
+    }
   });
-  events.addEventListener('open', () => {
+  source.addEventListener('open', () => {
     if (!dropped) return;
     dropped = false;
     current?.onResync?.();
     ctx.refreshUnread({ force: true });
   });
-  events.addEventListener('notification', (event) => {
+  source.addEventListener('notification', (event) => {
     const notification = JSON.parse(event.data);
     // On the Messages page the conversation list is fetched again and carries the unread flags, so this is skipped there.
     ctx.refreshUnread({ force: true });
@@ -135,7 +141,7 @@ function openEvents() {
       run: () => ctx.navigate(`#/messages/${encodeURIComponent(notification.conversationId)}`),
     });
   });
-  events.addEventListener('item', (event) => current?.onItem?.(JSON.parse(event.data).item));
+  source.addEventListener('item', (event) => current?.onItem?.(JSON.parse(event.data).item));
 }
 
 function toast(text, action) {

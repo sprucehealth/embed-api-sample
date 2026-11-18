@@ -28,6 +28,7 @@ export function createFallback(run, { streamUp = () => false, config = FALLBACK,
   let running = null;
   let again = false;
   let due = false;
+  let started = false;
   let stopped = false;
   let failures = 0;
   let quietSince = clock();
@@ -36,7 +37,7 @@ export function createFallback(run, { streamUp = () => false, config = FALLBACK,
   function schedule() {
     timers.clearTimeout(timer);
     timer = null;
-    if (stopped || doc.hidden) return;
+    if (!started || stopped || doc.hidden) return;
     const delay = fallbackDelay({ streamUp: streamUp(), failures, idleMs: clock() - quietSince }, config);
     timer = timers.setTimeout(fire, delay);
   }
@@ -81,6 +82,7 @@ export function createFallback(run, { streamUp = () => false, config = FALLBACK,
 
   return {
     start() {
+      started = true;
       lastRun = clock();
       doc.addEventListener('visibilitychange', onVisibility);
       schedule();
