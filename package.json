@@ -1,0 +1,15 @@
+{
+  "name": "embed-api-sample",
+  "version": "0.1.0",
+  "description": "Sample patient portal that embeds Spruce secure messaging through the Spruce Embedded Secure Messaging API. Not a supported SDK.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/main.js",
+    "test": "node --test \"test/*.test.js\""
+  }
+}
